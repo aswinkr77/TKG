@@ -37,7 +37,6 @@ if ($platform =~ /OS\/390/i) {
 		$capability_Hash{guardedstorage} = 1;
 	}
 }
-
 elsif ($platform =~ /Linux/i) {
 	# virtual infor
 	my $KVM_Image=`cat /proc/cpuinfo | grep -i QEMU`;
@@ -45,16 +44,28 @@ elsif ($platform =~ /Linux/i) {
 	my $Virt_Sys="";
 
 	if ($KVM_Image ne "" ) {
-		 $Virt_Sys="KVM"
+		$Virt_Sys="KVM";
 	} elsif ($VMWare_Image ne "") {
 		$Virt_Sys="VMWare";
 	}
 	$ENV{hypervisor} = $Virt_Sys;
 	$capability_Hash{hypervisor} = $Virt_Sys;
 }
+elsif ($platform =~ /CYGWIN_NT/i) {
+	my $hardware=`powershell.exe -Command "Get-WmiObject Win32_ComputerSystem | Select-Object Manufacturer"`;
+	my $Virt_Sys="";
+
+	if ($hardware =~ /QEMU/i) {
+		$Virt_Sys="KVM";
+	} elsif ($hardware =~ /VMware/i) {
+		$Virt_Sys="VMWare"
+	}
+	$ENV{hypervisor} = $Virt_Sys;
+	$capability_Hash{hypervisor} = $Virt_Sys;
+}
 else { 
 	exit;
-	}
+}
 
 if (%capability_Hash) {
 	open( my $fhout,  '>>',  $machineConfiguremk )  or die "Cannot create file $machineConfiguremk $!";
