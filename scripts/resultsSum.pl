@@ -194,45 +194,55 @@ sub resultReporter {
 							}
 						}
 						my $failureTests = "";
-						if ($diagnostic ne 'failure' || ($buildList !~ /openjdk/ && $buildList !~ /jck/)) {
-							$tapString .= $output;
-						} else { #rerun jdk or jck* custom target only work for diagnostic=failure
-							my @lines = split('\\n', $output);
-							if ($buildList =~ /openjdk/) {
-								for my $i (0 .. $#lines) {
-									if ( $lines[$i] =~ /[-]{50}/) {
-										if ( ($lines[$i+1] =~ /(TEST: )(.*?)(\.java|\.sh|#.*)$/) || ($lines[$i+1] =~ /(Test results: .*)(failed|error)/) ) {
-											# We have a failed TEST: line, or we have the Test results line containing failed|error
-											$i++;
-											$failureTests .= $lines[$i] . "\n";
+						if ($diagnostic ne 'noDetails') {
+							if ($diagnostic ne 'failure' || ($buildList !~ /openjdk/ && $buildList !~ /jck/)) {
+								$tapString .= $output;
+							} else { #rerun jdk or jck* custom target only work for diagnostic=failure
+								my @lines = split('\\n', $output);
+								if ($buildList =~ /openjdk/) {
+									for my $i (0 .. $#lines) {
+										if ( $lines[$i] =~ /[-]{50}/) {
+											# Look ahead for TEST: or Test results: line (may have extra lines in between)
+											for my $j ($i+1 .. $#lines) {
+												if ( ($lines[$j] =~ /(TEST: )(.*?)(\.java|\.sh|#.*)$/) || ($lines[$j] =~ /(Test results: .*)(failed|error)/) ) {
+													# We have a failed TEST: line, or we have the Test results line containing failed|error
+													$failureTests .= $lines[$j] . "\n";
+													# Skip past the found line to avoid reprocessing
+													$i = $j;
+													last;
+												}
+												# Stop searching if we hit another separator line or empty pattern
+												last if ($lines[$j] =~ /[-]{50}/ || $lines[$j] =~ /^={40,}/);
+											}
 										}
 									}
-								}
-							} elsif ($buildList =~ /jck/) {
-								my $testResult = "";
-								for my $i (0 .. $#lines) {
-									$lines[$i] =~ s/^\s+|\s+$//g; 
-									if ( $lines[$i] =~ /(.*?)(\.html|#.*)(.*?)(Failed|Error\.)(.*?)/) {
-										# We have a jck testcase result line with Failed|Error in it
-										my @testsInfo = split(/\s+/, $lines[$i]);
-										my $testName = $testsInfo[0];
-										$testName =~ s/#.*//;
-										$failureTests .= '        ' ."TEST: " . $testName . "\n";
-									} elsif ( $lines[$i] =~ /(Test results: .*)(failed|error)/) {
-										# We have the Test results line containing failed|error
-										$testResult = $lines[$i];
+								} elsif ($buildList =~ /jck/) {
+									my $testResult = "";
+									for my $i (0 .. $#lines) {
+										$lines[$i] =~ s/^\s+|\s+$//g; 
+										if (( $lines[$i] =~ /(.*?)(\.html|#.*)(.*?)(Failed|Error\.)(.*?)/) || ( $lines[$i] =~ /(api\/)(.*?)(\.html)(\/\S+)?( : FAILED)(.*?)/)) {
+											# We have a jck testcase result line with Failed|Error in it
+											# The optional (\/\S+)? covers sub-testcase format: "api/.../Test.html/SubTest0007 : FAILED"
+											my @testsInfo = split(/\s+/, $lines[$i]);
+											my $testName = $testsInfo[0];
+											$testName =~ s/#.*//;
+											$failureTests .= '        ' ."TEST: " . $testName . "\n";
+										} elsif ( $lines[$i] =~ /(Test results: .*)(failed|error)/) {
+											# We have the Test results line containing failed|error
+											$testResult = $lines[$i];
+										}
 									}
-								}
-								$failureTests .= '        ' .$testResult . "\n"; 
+									$failureTests .= '        ' .$testResult . "\n"; 
 
-							}
-							if ( $failureTests eq "" ) {
-								# Output of dump or other non-test failures
-								$tapString .= $output;
-							} else {
-								$tapString .= "    output:\n      |\n";
-								$tapString .= "        Failed test cases: \n" . $failureTests;
-								$tapString .= $jckFailedDuration ;
+								}
+								if ( $failureTests eq "" ) {
+									# Output of dump or other non-test failures
+									$tapString .= $output;
+								} else {
+									$tapString .= "    output:\n      |\n";
+									$tapString .= "        Failed test cases: \n" . $failureTests;
+									$tapString .= $jckFailedDuration ;
+								}
 							}
 						}
 						

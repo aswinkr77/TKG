@@ -14,11 +14,11 @@
 # limitations under the License.
 -->
 
-<project name="Compile Java Test Projects" basedir="." default="build">
+<project name="Compile Java Test Projects" basedir="." default="build"
+	xmlns:if="ant:if"
+	xmlns:unless="ant:unless">
 
 	<description>Compile Java Test Projects</description>
-
-	<taskdef resource="net/sf/antcontrib/antlib.xml" />
 
 	<property name="ascii.workspace.dir" value="${TEST_ROOT}" />
 	<property name="ascii.test.dir" value="${BUILD_ROOT}" />
@@ -28,28 +28,10 @@
 
 	<import file="./getDependencies.xml"/>
 
-	<var name="build.list" value= "" />
-	<if>
-		<equals arg1="${BUILD_LIST}" arg2=""/>
-		<then>
-			<var name="build.list" value= "*/build.xml" />
-		</then>
-		<elseif>
-			<equals arg1="${BUILD_LIST}" arg2="NULL"/>
-			<then>
-				<var name="build.list" value= "NULL" />
-			</then>
-		</elseif>
-		<else>
-			<var name="build.list" value="TestConfig/build.xml" />
-			<for list="${BUILD_LIST}" param="builddir">
-				<sequential>
-					<var name="build.list" value="${build.list},@{builddir}/build.xml" />
-				</sequential>
-			</for>
-		</else>
-	</if>
-	<echo> build.list is ${build.list} </echo>
+	<!-- BUILD_LIST_EXPANDED is pre-expanded by compile.mk (pure Make subst)
+	     to avoid charset issues with Ant exec on z/OS JDK 21+. -->
+	<property name="build.list" value="${BUILD_LIST_EXPANDED}"/>
+	<echo>build.list=${build.list}</echo>
 
 	<macrodef name="addTestenvProperties">
 		<attribute name="repoDir" default="." />
@@ -97,24 +79,20 @@
 	</target>
 
 	<target name="stage_test_material" depends="-create_test_directory">
-		<if>
-			<equals arg1="${os.name}" arg2="z/OS" />
-			<then>
-				<exec executable="cp" failonerror="true">
-					<arg value="-rf" />
-					<arg value="${ascii.workspace.dir}/TKG" />
-					<arg value="${ascii.test.dir}" />
-				</exec>
-			</then>
-			<else>
-				<copy todir="${ascii.test.dir}">
-					<fileset dir="${ascii.workspace.dir}">
-						<include name="TKG/**" />
-						<include name="*.mk" />
-					</fileset>
-				</copy>
-			</else>
-		</if>
+		<condition property="is.zos.os">
+			<equals arg1="${os.name}" arg2="z/OS"/>
+		</condition>
+		<exec executable="cp" failonerror="true" if:set="is.zos.os">
+			<arg value="-rf" />
+			<arg value="${ascii.workspace.dir}/TKG" />
+			<arg value="${ascii.test.dir}" />
+		</exec>
+		<copy todir="${ascii.test.dir}" unless:set="is.zos.os">
+			<fileset dir="${ascii.workspace.dir}">
+				<include name="TKG/**" />
+				<include name="*.mk" />
+			</fileset>
+		</copy>
 		<chmod dir="${ascii.test.dir}/TKG" perm="755"/>
 
 		<chmod file="${ascii.test.dir}/*.mk" perm="755"/>

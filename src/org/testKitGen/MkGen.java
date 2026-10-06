@@ -95,8 +95,9 @@ public class MkGen {
 
 				String jvmtestroot = "$(JVM_TEST_ROOT)$(D)" + String.join("$(D)", dirList);
 				f.write(testTargetName + ": TEST_RESROOT=" + jvmtestroot + "\n");
-				f.write(testTargetName + ": JVM_OPTIONS?=" + testInfo.getAotOptions() + "$(RESERVED_OPTIONS) "
-						+ (var.getJvmOptions().isEmpty() ? "" : (var.getJvmOptions() + " ")) + "$(EXTRA_OPTIONS)\n");
+				f.write(testTargetName + ": JVM_OPTIONS:=$(if $(strip $(JVM_OPTIONS)),$(JVM_OPTIONS),"
+						+ testInfo.getAotOptions() + "$(RESERVED_OPTIONS) "
+						+ (var.getJvmOptions().isEmpty() ? "" : (var.getJvmOptions() + " ")) + "$(EXTRA_OPTIONS))\n");
 
 				f.write(testTargetName + ": TEST_GROUP=" + testInfo.getLevelStr() + "\n");
 				f.write(testTargetName + ": TEST_ITERATIONS=" + testInfo.getIterations() + "\n");
@@ -188,7 +189,16 @@ public class MkGen {
 						f.write(indent + "itercnt=$$((itercnt+1)); \\\n");
 						f.write(indent + "done;");
 					}
-					f.write(indent + " } 2>&1 | tee -a $(Q)$(TESTOUTPUT)$(D)TestTargetResult$(Q);\n");
+
+					if (testTargetName.contains("jckinteractives")) {
+						// interactives running Arctic can hang when using "tee" due to unknown Arctic file handle left open
+						// See: https://github.com/adoptium/aqa-tests/issues/6752
+						// Workaround, direct output to file only, then cat it after...
+						f.write(indent + " } 2>&1 >> $(Q)$(TESTOUTPUT)$(D)TestTargetResult$(Q); \\\n");
+						f.write(indent + "cat $(Q)$(TESTOUTPUT)$(D)TestTargetResult$(Q);\n");
+					} else {
+						f.write(indent + " } 2>&1 | tee -a $(Q)$(TESTOUTPUT)$(D)TestTargetResult$(Q);\n");
+					}
 
 					if (!capKeys.isEmpty()) {
 						Collections.sort(capKeys, Collections.reverseOrder());
